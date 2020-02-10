@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -22,6 +24,10 @@ const logStream = "stream1"
 var token *string
 
 func main() {
+	cloudwatch()
+}
+
+func cloudwatch() {
 	// Initial credentials loaded from SDK's default credential chain. Such as
 	// the environment, shared credentials (~/.aws/credentials), or EC2 Instance
 	// Role. These credentials will be used to to make the STS Assume Role API.
@@ -31,7 +37,7 @@ func main() {
 
 	events := make([]LogEvent, 1)
 	events[0] = LogEvent{
-		msg:       "Message5",
+		msg:       getNetworkInfo(),
 		timestamp: makeTimestamp(),
 	}
 
@@ -91,4 +97,35 @@ func findToken(page *cloudwatchlogs.DescribeLogStreamsOutput) bool {
 
 func makeTimestamp() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)
+}
+
+func getNetworkInfo() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		panic(err)
+	}
+
+	var builder strings.Builder
+
+	for _, i := range ifaces {
+		addrs, err := i.Addrs()
+		if err != nil {
+			panic(err)
+		}
+		builder.WriteString(fmt.Sprintf("interface %s:\n", i.Name))
+		builder.WriteString(fmt.Sprintf("  hardware addr: %s\n", i.HardwareAddr))
+
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			builder.WriteString(fmt.Sprintf("  ip: %s\n", ip))
+		}
+	}
+
+	return builder.String()
 }
